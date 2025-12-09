@@ -69,14 +69,33 @@
         append: yes
 
     # SSH: configuração
-    - name: Permitir apenas autenticação por chaves públicas
+    - name: Bloquear logins SSH por senha
       ansible.builtin.lineinfile:
+        path: /etc/ssh/sshd_config
+        regexp: "^#?PasswordAuthentication"
+        line: "PasswordAuthentication no"
+        state: present
 
-    - name: Bloquear acesso ao usuário root via SSH
+    - name: Permitir autenticação por chave públicas
       ansible.builtin.lineinfile:
+        path: /etc/ssh/sshd_config
+        regexp: "^#?PubkeyAuthentication"
+        line: "PubkeyAuthentication yes"
+        state: present
+
+    - name: Proibir acesso ao root via SSH
+      ansible.builtin.lineinfile:
+        path: /etc/ssh/sshd_config
+        regexp: "^#?PermitRootLogin"
+        line: "PermitRootLogin no"
+        state: present
 
     - name: Permitir acesso apenas a usuários pertencentes aos grupos vagrant e ifpb;
       ansible.builtin.lineinfile:
+        path: /etc/ssh/sshd_config
+        line: "AllowGroups vagrant ifpb"
+        insertafter: EOF
+        create: yes
 
     - name: Gerar e configurar chaves públicas para os usuários nome1 e nome2;
       ansible.builtin.lineinfile:
@@ -85,7 +104,7 @@
       ansible.builtin.copy:
         dest: /etc/ssh/sshd_banner
 
-  handlers: # será que é necessário?
+  handlers: # será que é necessário? # reiniciar ssh tbm
     - name: Reiniciar se necessário
       ansible.builtin.reboot:
         msg: "Reinício iniciado pelo Ansible"
