@@ -5,8 +5,8 @@
 
   # Variáveis específicas do playbook
   vars:
-    nfs-mount-point: /var/nfs # Diretório local onde o NFS será montado
-    remote-share: 192.168.56.128:/dados/nfs # Caminho do compartilhamento NFS no servidor "arq"
+    nfs_mount_point: /var/nfs # Diretório local onde o NFS será montado
+    remote_share: 192.168.56.128:/dados/nfs # Caminho do compartilhamento NFS no servidor "arq"
 
   tasks:
     # Instala o servidor web Apache2
@@ -43,7 +43,7 @@
     # Cria o diretório local para montagem do NFS
     - name: Criar diretório de montagem /var/nfs
       ansible.builtin.file:
-        path: "{{ nfs-mount-point }}"
+        path: "{{ nfs_mount_point }}"
         state: directory
         owner: root
         group: root
@@ -54,14 +54,14 @@
       ansible.builtin.blockinfile:
         path: /etc/auto.master
         block: |
-          {{ nfs-mount-point }} /etc/auto.nfs --ghost
+          {{ nfs_mount_point }} /etc/auto.nfs --ghost
 
     # Cria arquivo auto.nfs com parâmetros de montagem do compartilhamento
     - name: Configurar arquivo auto.nfs.
       ansible.builtin.copy:
         dest: /etc/auto.nfs
         content: |
-          share -rw,soft,intr {{ remote-share }}
+          share -rw,soft,intr {{ remote_share }}
       notify: restart autofs # Reinicia autofs se o arquivo for modificado
 
   handlers:

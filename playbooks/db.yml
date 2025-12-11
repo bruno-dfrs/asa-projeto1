@@ -4,8 +4,8 @@
   become: true
 
   vars:
-    nfs-mount-point: /var/nfs # Diretório local onde o NFS será montado
-    remote-share: 192.168.56.128:/dados/nfs # Compartilhamento NFS remoto do servidor "arq"
+    nfs_mount_point: /var/nfs # Diretório local onde o NFS será montado
+    remote_share: 192.168.56.128:/dados/nfs # Compartilhamento NFS remoto do servidor "arq"
 
   tasks:
     ### ──────────────────────────────────────────────────────────────────
@@ -40,7 +40,7 @@
     # Cria o diretório local de montagem do NFS
     - name: Criar diretório de montagem local
       ansible.builtin.file:
-        path: "{{ nfs-mount-point }}"
+        path: "{{ nfs_mount_point }}"
         state: directory
         owner: root
         group: root
@@ -51,14 +51,14 @@
       ansible.builtin.blockinfile:
         path: /etc/auto.master
         block: |
-          {{ nfs-mount-point }} /etc/auto.nfs --ghost
+          {{ nfs_mount_point }} /etc/auto.nfs --ghost
 
     # Cria o arquivo auto.nfs com parâmetros do compartilhamento remoto
     - name: Criar configuração do ponto de montagem NFS
       ansible.builtin.copy:
         dest: /etc/auto.nfs
         content: |
-          share -rw,sync,hard,intr {{ remote-share }}
+          share -rw,sync,hard,intr {{ remote_share }}
       notify: restart autofs
 
     # Garante que o serviço autofs está ativo e habilitado para iniciar junto ao sistema

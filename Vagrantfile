@@ -70,7 +70,8 @@ Vagrant.configure("2") do |config|
     db.vm.network :private_network, mac: "080027ABCDEF", type: :dhcp
     db.vm.hostname = "db.#{NOME1}.#{NOME2}.devops"
 
-    arq.vm.provision "ansible" do |ansible|
+    # CORREÇÃO AQUI: trocado 'arq' por 'db'
+    db.vm.provision "ansible" do |ansible|
       ansible.compatibility_mode = "2.0"
       ansible.playbook = "playbooks/db.yml"
     end
@@ -84,7 +85,8 @@ Vagrant.configure("2") do |config|
     app.vm.network :private_network, mac: "080027FEDCBA", type: :dhcp
     app.vm.hostname = "app.#{NOME1}.#{NOME2}.devops"
 
-    arq.vm.provision "ansible" do |ansible|
+    # CORREÇÃO AQUI: trocado 'arq' por 'app'
+    app.vm.provision "ansible" do |ansible|
       ansible.compatibility_mode = "2.0"
       ansible.playbook = "playbooks/app.yml"
     end
@@ -103,7 +105,8 @@ Vagrant.configure("2") do |config|
     cli.vm.network :private_network, type: :dhcp
     cli.vm.hostname = "cli.#{NOME1}.#{NOME2}.devops"
 
-    arq.vm.provision "ansible" do |ansible|
+    # CORREÇÃO AQUI: trocado 'arq' por 'cli'
+    cli.vm.provision "ansible" do |ansible|
       ansible.compatibility_mode = "2.0"
       ansible.playbook = "playbooks/cli.yml"
     end

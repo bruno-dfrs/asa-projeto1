@@ -8,13 +8,13 @@
       - sdb
       - sdc
       - sdd
-    vg-name: dados # Nome do Volume Group
-    lv-name: ifpb # Nome do Logical Volume
-    lv-size: 15G # Tamanho do Logical Volume
-    mount-point: /dados # Ponto de montagem do LV
+    vg_name: dados # Nome do Volume Group
+    lv_name: ifpb # Nome do Logical Volume
+    lv_size: 15G # Tamanho do Logical Volume
+    nfs_mount_point: /dados # Ponto de montagem do LV
 
-    nfs-user: nfs-ifpb # Usuário que será dono do NFS
-    shared-dir: /dados/nfs # Diretório a ser compartilhado via NFS
+    nfs_user: nfs-ifpb # Usuário que será dono do NFS
+    shared_dir: /dados/nfs # Diretório a ser compartilhado via NFS
     subnet: 192.168.56.0/24 # Rede que terá acesso ao NFS
 
   tasks:
@@ -28,7 +28,7 @@
         state: latest
 
     - name: Copiar configuração do servidor DHCP
-      ansible.builtin.ansible.builtin.copy:
+      ansible.builtin.copy:
         src: ../files/dhcp/dhcpd.conf
         dest: /etc/dhcp/dhcpd.conf
       notify: restart isc-dhcp-server
@@ -58,7 +58,7 @@
 
     # Copia o arquivo de opções do BIND9
     - name: Copiar configurações do BIND9
-      ansible.builtin.ansible.builtin.copy:
+      ansible.builtin.copy:
         src: ../files/dns/named.conf.options
         dest: /etc/bind/named.conf.options
         owner: root
@@ -135,33 +135,33 @@
 
     # Cria o Volume Group "dados" usando os PVs
     - name: Criar volume group "dados"
-      ansible.builtin.command: vgcreate {{ vg-name }} /dev/sdb1 /dev/sdc1 /dev/sdd1
+      ansible.builtin.command: vgcreate {{ vg_name }} /dev/sdb1 /dev/sdc1 /dev/sdd1
       args:
-        creates: "/dev/{{ vg-name }}"
+        creates: "/dev/{{ vg_name }}"
 
     # Cria um Logical Volume "ifpb" de 15GB dentro do VG
     - name: Criar logical volume "ifpb" de 15GB
-      ansible.builtin.command: lvcreate -L {{ lv-size }} -n {{ lv-name }} {{ vg-name }}
+      ansible.builtin.command: lvcreate -L {{ lv_size }} -n {{ lv_name }} {{ vg_name }}
       args:
-        creates: "/dev/{{ vg-name }}/{{ lv-name }}"
+        creates: "/dev/{{ vg_name }}/{{ lv_name }}"
 
     # Formata o Logical Volume com sistema de arquivos ext4
     - name: Formatar o LV com ext4
       community.general.filesystem:
         fstype: ext4
-        dev: "/dev/{{ vg-name }}/{{ lv-name }}"
+        dev: "/dev/{{ vg_name }}/{{ lv_name }}"
 
     # Cria o diretório de montagem /dados
     - name: Criar diretório /dados
       ansible.builtin.file:
-        path: "{{ mount-point }}"
+        path: "{{ nfs_mount_point }}"
         state: directory
 
     # Configura o LV para montagem automática no /dados via fstab
     - name: Configurar montagem automática no /dados
       ansible.posix.mount:
-        path: "{{ mount-point }}"
-        src: "/dev/{{ vg-name }}/{{ lv-name }}"
+        path: "{{ nfs_mount_point }}"
+        src: "/dev/{{ vg_name }}/{{ lv_name }}"
         fstype: ext4
         state: mounted
         opts: defaults
@@ -179,7 +179,7 @@
     # Cria o usuário nfs-ifpb sem shell (somente para mapeamento)
     - name: Criar usuário "nfs-ifpb" sem shell
       ansible.builtin.user:
-        name: "{{ nfs-user }}"
+        name: "{{ nfs_user }}"
         shell: /usr/sbin/nologin
         system: yes
         state: present
@@ -187,21 +187,21 @@
     # Cria o diretório compartilhado e define permissões
     - name: Criar diretório compartilhado
       ansible.builtin.file:
-        path: "{{ shared-dir }}"
+        path: "{{ shared_dir }}"
         state: directory
-        owner: "{{ nfs-user }}"
-        group: "{{ nfs-user }}"
+        owner: "{{ nfs_user }}"
+        group: "{{ nfs_user }}"
         mode: "0750"
 
     # Obtém o UID do usuário nfs-ifpb
     - name: Obter UID do usuário nfs-ifpb
-      ansible.builtin.command: id -u {{ nfs-user }}
+      ansible.builtin.command: id -u {{ nfs_user }}
       register: uid
       changed_when: false
 
     # Obtém o GID do grupo nfs-ifpb
     - name: Obter GID do grupo nfs-ifpb
-      ansible.builtin.command: id -g {{ nfs-user }}
+      ansible.builtin.command: id -g {{ nfs_user }}
       register: gid
       changed_when: false
 
@@ -216,7 +216,7 @@
       ansible.builtin.copy:
         dest: /etc/exports
         content: |
-          {{ shared-dir }} {{ subnet }}(rw,sync,no_subtree_check,all_squash,anonuid={{ nfs_uid }},anongid={{ nfs_gid }})
+          {{ shared_dir }} {{ subnet }}(rw,sync,no_subtree_check,all_squash,anonuid={{ nfs_uid }},anongid={{ nfs_gid }})
       notify: restart nfs-kernel-server
 
     # Habilita e inicia o servidor NFS
