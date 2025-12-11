@@ -1,0 +1,78 @@
+---
+- name: Configurações exclusivas a serem aplicadas na máquina "app"
+  hosts: app
+  become: true
+
+  # Variáveis específicas do playbook
+  vars:
+    nfs-mount-point: /var/nfs # Diretório local onde o NFS será montado
+    remote-share: 192.168.56.128:/dados/nfs # Caminho do compartilhamento NFS no servidor "arq"
+
+  tasks:
+    # Instala o servidor web Apache2
+    - name: Instalar servidor web apache2
+      ansible.builtin.apt:
+        name: apache2
+        state: present
+
+    # Garante que o serviço Apache está rodando e habilitado no boot
+    - name: Garantir que apache2 está rodando e habilitar sua inicialização ao iniciar máquina
+      ansible.builtin.systemd_service:
+        name: apache2
+        state: started
+        enabled: yes
+
+    # Cria e copia o arquivo index.html personalizado para o diretório web
+    - name: Criar arquivo "index.html" personalizado
+      ansible.builtin.copy:
+        src: ../files/html/index.html # VERIFICAR ISSO AQUI
+        dest: "/var/www/html/index.html"
+        owner: www-data
+        group: www-data
+        mode: "0644"
+      notify: restart apache2
+
+    # Instala o autofs e o cliente NFS para montagem automática
+    - name: Instalar autofs e cliente NFS
+      ansible.builtin.apt:
+        name:
+          - autofs
+          - nfs-common
+        state: present
+
+    # Cria o diretório local para montagem do NFS
+    - name: Criar diretório de montagem /var/nfs
+      ansible.builtin.file:
+        path: "{{ nfs-mount-point }}"
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+
+    # Adiciona entrada no auto.master para o ponto de montagem
+    - name: Configurar auto.master para NFS
+      ansible.builtin.blockinfile:
+        path: /etc/auto.master
+        block: |
+          {{ nfs-mount-point }} /etc/auto.nfs --ghost
+
+    # Cria arquivo auto.nfs com parâmetros de montagem do compartilhamento
+    - name: Configurar arquivo auto.nfs.
+      ansible.builtin.copy:
+        dest: /etc/auto.nfs
+        content: |
+          share -rw,soft,intr {{ remote-share }}
+      notify: restart autofs # Reinicia autofs se o arquivo for modificado
+
+  handlers:
+    # Reinicia o Apache
+    - name: restart apache2
+      ansible.builtin.systemd_service:
+        name: apache2
+        state: restarted
+
+    # Reinicia o serviço autofs
+    - name: restart autofs
+      ansible.builtin.systemd_service:
+        name: autofs
+        state: restarted

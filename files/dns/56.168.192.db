@@ -1,0 +1,14 @@
+$TTL 86400   
+@   IN  SOA     arq.bruno.icaro.devops. root.bruno.icaro.devops. (
+        2025082501    ;Serial
+        3600          ;Refresh
+        1800          ;Retry
+        604800        ;Expire
+        86400         ;Minimum TTL
+
+)
+@   	 IN     NS     arq.bruno.icaro.devops.
+
+126      IN     PTR    arq.bruno.icaro.devops.
+103      IN     PTR    db.bruno.icaro.devops. 
+163      IN     PTR    app.bruno.icaro.devops.

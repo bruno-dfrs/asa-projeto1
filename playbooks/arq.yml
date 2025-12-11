@@ -1,0 +1,243 @@
+---
+- name: Configurações exclusivas a serem aplicadas na máquina "arq"
+  hosts: arq
+  become: true
+
+  vars:
+    partitions: # Partições a serem criadas
+      - sdb
+      - sdc
+      - sdd
+    vg-name: dados # Nome do Volume Group
+    lv-name: ifpb # Nome do Logical Volume
+    lv-size: 15G # Tamanho do Logical Volume
+    mount-point: /dados # Ponto de montagem do LV
+
+    nfs-user: nfs-ifpb # Usuário que será dono do NFS
+    shared-dir: /dados/nfs # Diretório a ser compartilhado via NFS
+    subnet: 192.168.56.0/24 # Rede que terá acesso ao NFS
+
+  tasks:
+    ### ──────────────────────────────────────────────────────────────────
+    ###                               DHCP
+    ### ──────────────────────────────────────────────────────────────────
+
+    - name: Instalar servidor DHCP (ISC DHCP Server)
+      ansible.builtin.apt:
+        name: isc-dhcp-server
+        state: latest
+
+    - name: Copiar configuração do servidor DHCP
+      ansible.builtin.ansible.builtin.copy:
+        src: ../files/dhcp/dhcpd.conf
+        dest: /etc/dhcp/dhcpd.conf
+      notify: restart isc-dhcp-server
+
+    - name: Definir interface que DHCP usará
+      ansible.builtin.lineinfile:
+        path: /etc/default/isc-dhcp-server
+        regexp: "^INTERFACESv4="
+        line: "INTERFACESv4='eth1'"
+        state: present
+      notify: restart isc-dhcp-server
+
+    - name: Garantir que o servidor DHCP está em execução ao iniciar máquina
+      ansible.builtin.systemd_service:
+        name: isc-dhcp-server
+        state: restarted
+        enabled: yes
+
+    ### ──────────────────────────────────────────────────────────────────
+    ###                               DNS
+    ### ──────────────────────────────────────────────────────────────────
+
+    - name: Instalar servidor DNS (BIND9)
+      ansible.builtin.apt:
+        name: bind9
+        state: latest
+
+    # Copia o arquivo de opções do BIND9
+    - name: Copiar configurações do BIND9
+      ansible.builtin.ansible.builtin.copy:
+        src: ../files/dns/named.conf.options
+        dest: /etc/bind/named.conf.options
+        owner: root
+        group: bind
+        mode: "0644"
+      notify: restart bind9
+
+      # Copia o arquivo de zonas internas do BIND9
+    - name: Copiar configuração de zonas internas do BIND9
+      ansible.builtin.copy:
+        src: ../files/dns/named.conf.internal-zones
+        dest: /etc/bind/named.conf.local
+        owner: root
+        group: bind
+        mode: "0644"
+      notify: restart bind9
+
+    # Copia o arquivo de zonas diretas do BIND9
+    - name: Copiar configração de zonas diretas do BIND9
+      ansible.builtin.copy:
+        src: ../files/dns/bruno.icaro.devops.db
+        dest: /etc/bind/bruno.icaro.devops.db
+        owner: root
+        group: bind
+        mode: "0644"
+      notify: restart bind9
+
+      # Copia o arquivo de zonas reversas do BIND9
+    - name: Copiar configração de zonas reversas do BIND9
+      ansible.builtin.copy:
+        src: ../files/dns/56.168.192.db
+        dest: /etc/bind/56.168.192.db
+        owner: root
+        group: bind
+        mode: "0644"
+      notify: restart bind9
+
+    # Habilita e inicia o serviço BIND9
+    - name: Garantir que o servidor DNS está em execução ao iniciar máquina
+      ansible.builtin.systemd_service:
+        name: bind9
+        state: started
+        enabled: yes
+
+    ### ──────────────────────────────────────────────────────────────────
+    ###                               LVM
+    ### ──────────────────────────────────────────────────────────────────
+
+    # Instala os pacotes LVM2 e parted
+    - name: Instalar LVM2
+      apt:
+        name:
+          - lvm2
+          - parted
+        state: present
+
+    # Cria partições físicas em cada disco adicional
+    - name: Criar partições físicas nos discos
+      community.general.parted:
+        device: "/dev/{{ item }}"
+        number: 1
+        state: present
+        part_type: primary
+        fs_type: ext4
+        resize: yes
+      loop: "{{ partitions }}"
+
+    # Inicializa cada disco como Physical Volume
+    - name: Criar volumes físicos
+      ansible.builtin.command: pvcreate /dev/{{ item }}1
+      loop: "{{ partitions }}" # POSSIVELMENTE VAI DAR ERRO AQUI
+      args:
+        creates: "/dev/{{ item }}1"
+
+    # Cria o Volume Group "dados" usando os PVs
+    - name: Criar volume group "dados"
+      ansible.builtin.command: vgcreate {{ vg-name }} /dev/sdb1 /dev/sdc1 /dev/sdd1
+      args:
+        creates: "/dev/{{ vg-name }}"
+
+    # Cria um Logical Volume "ifpb" de 15GB dentro do VG
+    - name: Criar logical volume "ifpb" de 15GB
+      ansible.builtin.command: lvcreate -L {{ lv-size }} -n {{ lv-name }} {{ vg-name }}
+      args:
+        creates: "/dev/{{ vg-name }}/{{ lv-name }}"
+
+    # Formata o Logical Volume com sistema de arquivos ext4
+    - name: Formatar o LV com ext4
+      community.general.filesystem:
+        fstype: ext4
+        dev: "/dev/{{ vg-name }}/{{ lv-name }}"
+
+    # Cria o diretório de montagem /dados
+    - name: Criar diretório /dados
+      ansible.builtin.file:
+        path: "{{ mount-point }}"
+        state: directory
+
+    # Configura o LV para montagem automática no /dados via fstab
+    - name: Configurar montagem automática no /dados
+      ansible.posix.mount:
+        path: "{{ mount-point }}"
+        src: "/dev/{{ vg-name }}/{{ lv-name }}"
+        fstype: ext4
+        state: mounted
+        opts: defaults
+
+    ### ──────────────────────────────────────────────────────────────────
+    ###                               NFS
+    ### ──────────────────────────────────────────────────────────────────
+
+    # Instala o servidor NFS
+    - name: Instalar servidor NFS
+      apt:
+        name: nfs-kernel-server
+        state: present
+
+    # Cria o usuário nfs-ifpb sem shell (somente para mapeamento)
+    - name: Criar usuário "nfs-ifpb" sem shell
+      ansible.builtin.user:
+        name: "{{ nfs-user }}"
+        shell: /usr/sbin/nologin
+        system: yes
+        state: present
+
+    # Cria o diretório compartilhado e define permissões
+    - name: Criar diretório compartilhado
+      ansible.builtin.file:
+        path: "{{ shared-dir }}"
+        state: directory
+        owner: "{{ nfs-user }}"
+        group: "{{ nfs-user }}"
+        mode: "0750"
+
+    # Obtém o UID do usuário nfs-ifpb
+    - name: Obter UID do usuário nfs-ifpb
+      ansible.builtin.command: id -u {{ nfs-user }}
+      register: uid
+      changed_when: false
+
+    # Obtém o GID do grupo nfs-ifpb
+    - name: Obter GID do grupo nfs-ifpb
+      ansible.builtin.command: id -g {{ nfs-user }}
+      register: gid
+      changed_when: false
+
+    # Armazena UID e GID em variáveis para configurar exportações NFS
+    - name: Armazenar UID e GID em variáveis
+      ansible.builtin.set_fact:
+        nfs_uid: "{{ uid.stdout }}"
+        nfs_gid: "{{ gid.stdout }}"
+
+    # Configura a exportação NFS no arquivo /etc/exports
+    - name: Configurar exportação NFS
+      ansible.builtin.copy:
+        dest: /etc/exports
+        content: |
+          {{ shared-dir }} {{ subnet }}(rw,sync,no_subtree_check,all_squash,anonuid={{ nfs_uid }},anongid={{ nfs_gid }})
+      notify: restart nfs-kernel-server
+
+    # Habilita e inicia o servidor NFS
+    - name: Habilitar e iniciar servidor NFS
+      ansible.builtin.systemd_service:
+        name: nfs-kernel-server
+        state: started
+        enabled: yes
+
+  handlers:
+    - name: restart isc-dhcp-server
+      ansible.builtin.systemd_service:
+        name: isc-dhcp-server
+        state: restarted
+
+    - name: restart bind9
+      ansible.builtin.systemd_service:
+        name: bind9
+        state: restarted
+
+    - name: restart nfs-kernel-server
+      ansible.builtin.systemd_service:
+        name: nfs-kernel-server
+        state: restarted

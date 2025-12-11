@@ -1,0 +1,95 @@
+---
+- name: Configurações exclusivas a serem aplicadas na máquina "cli"
+  hosts: cli
+  become: true
+
+  # Variáveis do playbook
+  vars:
+    nfs-mount-point: /var/nfs # Diretório local de montagem do NFS
+    remote-share: 192.168.56.126:/dados/nfs # Compartilhamento NFS remoto
+
+  tasks:
+    # Instala pacotes necessários para navegador e X11
+    - name: Instalar firefox-esr e xauth.
+      ansible.builtin.apt:
+        name:
+          - firefox-esr # Navegador
+          - xauth # Autenticação X11
+          - x11-utils # Utilitários X11
+        state: present
+
+    # Ajusta configuração SSH para permitir encaminhamento X11
+    - name: Ajustar SSH para permitir exportação X11.
+      ansible.builtin.lineinfile:
+        path: /etc/ssh/sshd_config
+        regexp: "^#?X11Forwarding"
+        line: "X11Forwarding yes"
+        state: present
+      notify: restart ssh
+
+    # Define deslocamento de display X11
+    - name: Garantir configuração X11DisplayOffset.
+      ansible.builtin.lineinfile:
+        path: /etc/ssh/sshd_config
+        regexp: "^#?X11DisplayOffset"
+        line: "X11DisplayOffset 10"
+        state: present
+      notify: restart ssh
+
+    # Garantir que o X11 não usará localhost
+    - name: Garantir configuração X11UseLocalhost.
+      ansible.builtin.lineinfile:
+        path: /etc/ssh/sshd_config
+        regexp: "^#?X11UseLocalhost"
+        line: "X11UseLocalhost no"
+        state: present
+      notify: restart ssh
+
+    # Instala serviço autofs e cliente NFS
+    - name: Instalar autofs e cliente NFS.
+      ansible.builtin.apt:
+        name:
+          - autofs # Montagem automática
+          - nfs-common # Cliente NFS
+        state: present
+
+    # Cria diretório de montagem local
+    - name: Criar diretório de montagem /var/nfs.
+      ansible.builtin.file:
+        path: "{{ nfs-mount-point }}"
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+
+    # Configura auto.master para mapear o diretório NFS
+    - name: Configurar auto.master para NFS.
+      ansible.builtin.blockinfile:
+        path: /etc/auto.master
+        block: |
+          {{ nfs-mount-point }} /etc/auto.nfs --ghost
+
+    # Configura o arquivo auto.nfs com parâmetros do compartilhamento
+    - name: Configurar arquivo auto.nfs.
+      ansible.builtin.copy:
+        dest: /etc/auto.nfs
+        content: |
+          share -rw,sync,hard,intr {{ remote-share }}
+
+    # Reinicia autofs para aplicar novas configurações
+    - name: Garantir que a monatgem NFS está em execução ao iniciar máquina
+      ansible.builtin.systemd_service:
+        name: autofs
+        state: started
+        enabled: yes
+
+  handlers:
+    - name: restart ssh
+      ansible.builtin.systemd_service:
+        name: ssh
+        state: restarted
+
+    - name: restart autofs
+      ansible.builtin.systemd_service:
+        name: autofs
+        state: restarted
