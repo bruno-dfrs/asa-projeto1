@@ -9,6 +9,7 @@ Vagrant.configure("2") do |config|
   # ──────────────────────────────────────────────────────────────────
   # Configurações genéricas (arq, db, app e cli)
   # ──────────────────────────────────────────────────────────────────
+
   config.vm.box = "debian/bookworm64" # Box base utilizada para todas as VMs
   config.ssh.insert_key = false # Impede que o Vagrant gere novas chaves SSH
 
@@ -26,7 +27,7 @@ Vagrant.configure("2") do |config|
   # Desativa a pasta sincronizada padrão
   config.vm.synced_folder ".", "/vagrant", disabled: true
 
-  # Configuração do virtualbox
+  # Configurações do VirtualBox
   config.vm.provider :virtualbox do |vb|
     vb.gui = false
     vb.memory = "512"
@@ -34,7 +35,7 @@ Vagrant.configure("2") do |config|
     vb.check_guest_additions = false
   end
 
-  # Provisionamento global com Ansible
+  # Aplicando configurações do playbook genérica em todas as máquinas
   config.vm.provision "ansible" do |ansible|
     ansible.compatibility_mode = "2.0"
     ansible.playbook = "playbooks/generic.yml" # Playbook de configuração comum
@@ -46,6 +47,7 @@ Vagrant.configure("2") do |config|
   # ──────────────────────────────────────────────────────────────────
   # Servidor de Arquivos (arq)
   # ──────────────────────────────────────────────────────────────────
+
   config.vm.define "arq" do |arq|
     (1..3).each do |i|
       arq.vm.disk :disk, size: "10GB", name: "disk-#{i}"
@@ -53,27 +55,45 @@ Vagrant.configure("2") do |config|
 
     arq.vm.network :private_network, ip: "192.168.56.#{XX}" 
     arq.vm.hostname = "arq.#{NOME1}.#{NOME2}.devops"
+
+    arq.vm.provision "ansible" do |ansible|
+      ansible.compatibility_mode = "2.0"
+      ansible.playbook = "playbooks/arq.yml"
+    end
   end
 
   # ──────────────────────────────────────────────────────────────────
   # Servidor de Banco de Dados (db)
   # ──────────────────────────────────────────────────────────────────
+
   config.vm.define "db" do |db|
     db.vm.network :private_network, mac: "080027ABCDEF", type: :dhcp
     db.vm.hostname = "db.#{NOME1}.#{NOME2}.devops"
+
+    arq.vm.provision "ansible" do |ansible|
+      ansible.compatibility_mode = "2.0"
+      ansible.playbook = "playbooks/db.yml"
+    end
   end
 
   # ──────────────────────────────────────────────────────────────────
   # Servidor de Aplicação (app)
   # ──────────────────────────────────────────────────────────────────
+
   config.vm.define "app" do |app|
     app.vm.network :private_network, mac: "080027FEDCBA", type: :dhcp
     app.vm.hostname = "app.#{NOME1}.#{NOME2}.devops"
+
+    arq.vm.provision "ansible" do |ansible|
+      ansible.compatibility_mode = "2.0"
+      ansible.playbook = "playbooks/app.yml"
+    end
   end
 
   # ──────────────────────────────────────────────────────────────────
   # Host Cliente (cli)
   # ──────────────────────────────────────────────────────────────────
+
   config.vm.define "cli" do |cli|
     cli.vm.provider :virtualbox do |vb|
       vb.gui = true
@@ -82,5 +102,10 @@ Vagrant.configure("2") do |config|
 
     cli.vm.network :private_network, type: :dhcp
     cli.vm.hostname = "cli.#{NOME1}.#{NOME2}.devops"
+
+    arq.vm.provision "ansible" do |ansible|
+      ansible.compatibility_mode = "2.0"
+      ansible.playbook = "playbooks/cli.yml"
+    end
   end
 end
