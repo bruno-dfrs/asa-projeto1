@@ -3,7 +3,6 @@
 
 NOME1 = "bruno"
 NOME2 = "icaro"
-XX = "28"
 
 Vagrant.configure("2") do |config|
   # ──────────────────────────────────────────────────────────────────
@@ -53,7 +52,7 @@ Vagrant.configure("2") do |config|
       arq.vm.disk :disk, size: "10GB", name: "disk-#{i}"
     end
 
-    arq.vm.network :private_network, ip: "192.168.56.#{XX}" 
+    arq.vm.network :private_network, ip: "192.168.56.128" 
     arq.vm.hostname = "arq.#{NOME1}.#{NOME2}.devops"
 
     arq.vm.provision "ansible" do |ansible|
@@ -98,14 +97,12 @@ Vagrant.configure("2") do |config|
 
   config.vm.define "cli" do |cli|
     cli.vm.provider :virtualbox do |vb|
-      vb.gui = true
       vb.memory = "1024"
     end
 
     cli.vm.network :private_network, type: :dhcp
     cli.vm.hostname = "cli.#{NOME1}.#{NOME2}.devops"
 
-    # CORREÇÃO AQUI: trocado 'arq' por 'cli'
     cli.vm.provision "ansible" do |ansible|
       ansible.compatibility_mode = "2.0"
       ansible.playbook = "playbooks/cli.yml"

@@ -101,11 +101,12 @@
         mode: "0600"
       loop: "{{ users }}"
 
-    # AJUSTE? executar nos ansibles individuais de cada maquina. Todos os arqs terao nomes iguais e serao sobrepostos.
     - name: Copiar chave privada das VMs para a máquina real
       ansible.builtin.fetch:
-        src: "/home/{{ item }}/.ssh/id_rsa"
-        dest: /tmp/ssh-keys/
+        src: "/home/{{ item }}/.ssh/id_rsa.pub"
+        dest: "/home/{{ ansible_user_id }}/.ssh/{{ inventory_hostname }}_key.pub"
+        mode: "0600"
+        flat: yes
       loop: "{{ users }}"
 
     # Configurações no /etc/ssh/sshd_config
@@ -140,7 +141,7 @@
     # Banner SSH
     - name: Criar arquivo contendo banner do SSH
       ansible.builtin.copy:
-        content: "Acesso apenas para pessoas com autorização expressa!!!"
+        content: 'Acesso apenas para pessoas com autorização expressa!!!\n'
         dest: /etc/issue.net
 
     - name: Apresentar mensagem de saudação ao acessar o sistema via SSH
