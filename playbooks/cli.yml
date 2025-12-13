@@ -5,8 +5,8 @@
 
   # Variáveis do playbook
   vars:
-    nfs_mount_point: /var/nfs # Diretório local de montagem do NFS
-    remote_share: 192.168.56.126:/dados/nfs # Compartilhamento NFS remoto
+    nfs_mount_point: /var # Diretório local de montagem do NFS
+    remote_share: 192.168.56.128:/dados/nfs # Compartilhamento NFS remoto
 
   tasks:
     # Instala pacotes necessários para navegador e X11
@@ -74,7 +74,8 @@
       ansible.builtin.copy:
         dest: /etc/auto.nfs
         content: |
-          share -rw,sync,hard,intr {{ remote_share }}
+          nfs -fstype=nfs,rw,soft,intr,timeo=300,retrans=3 {{ remote_share }}
+      notify: restart autofs
 
     # Reinicia autofs para aplicar novas configurações
     - name: Garantir que a monatgem NFS está em execução ao iniciar máquina

@@ -191,7 +191,7 @@
         state: directory
         owner: "{{ nfs_user }}"
         group: "{{ nfs_user }}"
-        mode: "0750"
+        mode: "0750" # MUDAR PARA 0755 RESOLVE PROBLEMA
 
     # Obtém o UID do usuário nfs-ifpb
     - name: Obter UID do usuário nfs-ifpb
@@ -216,7 +216,7 @@
       ansible.builtin.copy:
         dest: /etc/exports
         content: |
-          {{ shared_dir }} {{ subnet }}(rw,sync,no_subtree_check,all_squash,anonuid={{ nfs_uid }},anongid={{ nfs_gid }})
+          {{ shared_dir }} {{ subnet }} (rw,sync,no_subtree_check,all_squash,anonuid={{ nfs_uid }},anongid={{ nfs_gid }})
       notify: restart nfs-kernel-server
 
     # Habilita e inicia o servidor NFS

@@ -62,7 +62,7 @@
         dest: /etc/auto.nfs
         content: |
           share -rw,soft,intr {{ remote_share }}
-      notify: restart autofs # Reinicia autofs se o arquivo for modificado
+      notify: restart autofs
 
   handlers:
     # Reinicia o Apache
