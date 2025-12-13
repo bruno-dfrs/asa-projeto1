@@ -70,6 +70,8 @@ The `Vagrantfile` serves as the main configuration blueprint for the entire infr
    - **Stage 1**: `generic.yml` applies common configurations to all VMs (users, SSH, packages)
    - **Stage 2**: Role-specific playbooks configure specialized services for each VM
 
+---
+
 ## Virtual Machines and Playbooks
 
 ### 1. `arq` - Infrastructure Server (`arq.yml`)
@@ -180,6 +182,8 @@ This section documents the key configuration files that enable the network servi
 **File: `files/html/index.html`**
 - Replaces the default Apache page with the project description and team members' names and student IDs.
 
+---
+
 ## Getting Started
 
 ### Prerequisites
@@ -205,10 +209,10 @@ vagrant up
 ### SSH Access
 Use SSH commands to access any VM:
 ```bash
-ssh bruno|icaro@192.168.56.128      # arq (infrastructure server)
-ssh bruno|icaro@192.168.56.110      # db (database server)
-ssh bruno|icaro@192.168.56.180      # app (application server)
-ssh -X bruno|icaro@192.168.56.50    # cli (client workstation - address may vary due to DHCP)
+ssh bruno|icaro@192.168.56.128      # arq 
+ssh bruno|icaro@192.168.56.110      # db 
+ssh bruno|icaro@192.168.56.180      # app 
+ssh -X bruno|icaro@192.168.56.50    # cli - address may vary due to DHCP
 ```
 
 ### Web Server Access
