@@ -17,10 +17,10 @@
       ansible.builtin.apt:
         update_cache: yes
 
-    - name: Atualizar todos os pacotes para a versão mais recente
-      ansible.builtin.apt:
-        upgrade: full
-        autoremove: yes
+    # - name: Atualizar todos os pacotes para a versão mais recente
+    #   ansible.builtin.apt:
+    #     upgrade: full
+    #     autoremove: yes
 
     ### ──────────────────────────────────────────────────────────────────
     ###                               chrony
@@ -67,46 +67,20 @@
         password: "{{ 'ifpb' | password_hash('sha512') }}"
         groups: ifpb
         append: yes
+        shell: /bin/bash
+        generate_ssh_key: true
+        ssh_key_file: .ssh/key_{{ item }}
       loop: "{{ users }}"
 
     ### ──────────────────────────────────────────────────────────────────
     ###                               SSH
     ### ──────────────────────────────────────────────────────────────────
 
-    # Criando chaves SSH e as transferindo para a máquina real
-    - name: Criar diretório .ssh/ nos homes dos usuários "bruno" e "icaro"
-      ansible.builtin.file:
-        path: "/home/{{ item }}/.ssh"
-        state: directory
-        owner: "{{ item }}"
-        group: "{{ item }}"
-        mode: "0700"
-      loop: "{{ users }}"
-
-    - name: Gerar chaves SSH para os usuários "bruno" e "icaro"
-      community.crypto.openssh_keypair:
-        path: "/home/{{ item }}/.ssh/id_rsa"
-        owner: "{{ item }}"
-        group: "{{ item }}"
-        mode: "0600"
-      loop: "{{ users }}"
-
-    - name: Copiar chaves públicas para .ssh/authorized_keys
-      ansible.builtin.copy:
-        src: "/home/{{ item }}/.ssh/id_rsa.pub"
-        dest: "/home/{{ item }}/.ssh/authorized_keys"
-        remote_src: yes
-        owner: "{{ item }}"
-        group: "{{ item }}"
-        mode: "0600"
-      loop: "{{ users }}"
-
-    - name: Copiar chave privada das VMs para a máquina real
-      ansible.builtin.fetch:
-        src: "/home/{{ item }}/.ssh/id_rsa.pub"
-        dest: "/home/{{ ansible_user_id }}/.ssh/{{ inventory_hostname }}_key.pub"
-        mode: "0600"
-        flat: yes
+    - name: Enviar chave pública da máquina real para a VM
+      ansible.posix.authorized_key:
+        user: "{{ item }}"
+        state: present
+        key: "{{ lookup('file', '~/.ssh/id_ed25519.pub') }}"
       loop: "{{ users }}"
 
     # Configurações no /etc/ssh/sshd_config
