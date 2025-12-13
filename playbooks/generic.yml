@@ -17,10 +17,10 @@
       ansible.builtin.apt:
         update_cache: yes
 
-    # - name: Atualizar todos os pacotes para a versão mais recente
-    #   ansible.builtin.apt:
-    #     upgrade: full
-    #     autoremove: yes
+    - name: Atualizar todos os pacotes para a versão mais recente
+      ansible.builtin.apt:
+        upgrade: full
+        autoremove: yes
 
     ### ──────────────────────────────────────────────────────────────────
     ###                               chrony
