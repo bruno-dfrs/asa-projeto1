@@ -1,25 +1,27 @@
 ---
-- name: Configurações exclusivas a serem aplicadas na máquina "db"
+- name: Apply exclusive configurations to the "db" machine
   hosts: db
   become: true
 
   vars:
-    nfs_mount_point: /var/nfs # Diretório local onde o NFS será montado
-    remote_share: 192.168.56.128:/dados/nfs # Compartilhamento NFS remoto do servidor "arq"
+    nfs_mount_point: /var # Local directory for NFS mount point
+    remote_share: 192.168.56.128:/dados/nfs # Remote NFS share path (server IP:path)
 
   tasks:
     ### ──────────────────────────────────────────────────────────────────
     ###                          MariaDB Server
     ### ──────────────────────────────────────────────────────────────────
 
-    # Instala o servidor de banco de dados MariaDB
-    - name: Instalar servidor de banco de dados mariadb-server
+    # 1. Install the MariaDB database server package
+    # MariaDB is a community-developed fork of MySQL and will serve as the database engine.
+    - name: Install MariaDB database server
       ansible.builtin.apt:
         name: mariadb-server
         state: present
 
-    # Garante que o serviço MariaDB está ativo e habilitado para iniciar junto ao sistema
-    - name: Garantir que mariadb está rodando
+    # 2. Ensure the MariaDB service is running and enabled on boot
+    # Starts the MariaDB service immediately and configures it to launch automatically on system startup.
+    - name: Ensure MariaDB service is active
       ansible.builtin.systemd_service:
         name: mariadb
         state: started
@@ -29,46 +31,53 @@
     ###                               NFS
     ### ──────────────────────────────────────────────────────────────────
 
-    # Instala o autofs e o cliente NFS
-    - name: Instalar autofs
+    # 3. Install the AutoFS service for automatic NFS mounting
+    # AutoFS will mount the NFS share on-demand when accessed and unmount it after inactivity.
+    - name: Install AutoFS service
       ansible.builtin.apt:
-        name:
-          - autofs
-          - nfs-common
-        state: present
+        name: autofs
+        state: latest
 
-    # Cria o diretório local de montagem do NFS
-    - name: Criar diretório de montagem local
+    # 4. Create the local base directory for the NFS mount point
+    # This directory will host the AutoFS-managed mount point for the remote share.
+    - name: Create NFS base mount directory
       ansible.builtin.file:
         path: "{{ nfs_mount_point }}"
         state: directory
         owner: root
         group: root
-        mode: "0755"
+        mode: "0755" # Allows all users to list and enter the directory
 
-    # Configura o auto.master para incluir o ponto de montagem NFS
-    - name: Configurar o autofs para montagem automática do NFS
-      ansible.builtin.blockinfile:
+    # 5. Configure the AutoFS master map file
+    # Informs AutoFS to use the map file /etc/auto.nfs for mounts under `{{ nfs_mount_point }}`.
+    # The '--ghost' option creates empty directories before mounting for better visibility.
+    - name: Configure AutoFS master map
+      ansible.builtin.lineinfile:
         path: /etc/auto.master
-        block: |
-          {{ nfs_mount_point }} /etc/auto.nfs --ghost
+        line: "{{ nfs_mount_point }} /etc/auto.nfs --ghost"
+        insertafter: EOF
+        create: yes # Creates the /etc/auto.master file if it doesn't exist
 
-    # Cria o arquivo auto.nfs com parâmetros do compartilhamento remoto
-    - name: Criar configuração do ponto de montagem NFS
-      ansible.builtin.copy:
-        dest: /etc/auto.nfs
-        content: |
-          share -rw,sync,hard,intr {{ remote_share }}
+    # 6. Define the NFS share details in the AutoFS map file
+    # Specifies the remote share, mount options, and local subdirectory name ("nfs").
+    # Options: rw (read-write), hard (retry indefinitely on server failure), timeo (timeout in deciseconds).
+    - name: Configure NFS share in AutoFS map
+      ansible.builtin.lineinfile:
+        path: /etc/auto.nfs
+        line: "nfs -fstype=nfs,rw,hard,timeo=600 {{ remote_share }}"
+        insertafter: EOF
+        create: yes # Creates the /etc/auto.nfs file if it doesn't exist
       notify: restart autofs
 
-    # Garante que o serviço autofs está ativo e habilitado para iniciar junto ao sistema
-    - name: Garantir que o chrony está em execução ao iniciar máquina
+    # 7. Ensure the AutoFS service is running and enabled at boot
+    - name: Ensure AutoFS service is active
       ansible.builtin.systemd_service:
         name: autofs
         state: started
         enabled: yes
 
   handlers:
+    # Handler to restart the AutoFS service if its configuration changed
     - name: restart autofs
       ansible.builtin.systemd_service:
         name: autofs

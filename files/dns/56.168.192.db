@@ -9,6 +9,6 @@ $TTL 86400
 )
 @   	 IN     NS     arq.bruno.icaro.devops.
 
-126      IN     PTR    arq.bruno.icaro.devops.
-103      IN     PTR    db.bruno.icaro.devops. 
-163      IN     PTR    app.bruno.icaro.devops.
+128      IN     PTR    arq.bruno.icaro.devops.
+110      IN     PTR    db.bruno.icaro.devops. 
+180      IN     PTR    app.bruno.icaro.devops.

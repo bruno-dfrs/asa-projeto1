@@ -1,5 +1,5 @@
 ---
-- name: Configurações genéricas a serem aplicadas nas máquinas arq, db, app e cli
+- name: Apply generic configurations to all machines (arq, db, app, cli)
   hosts: all
   become: true
 
@@ -10,57 +10,70 @@
 
   tasks:
     ### ──────────────────────────────────────────────────────────────────
-    ###                       Atalizando o sistema
+    ###                          System Update
     ### ──────────────────────────────────────────────────────────────────
 
-    - name: Atualizar cache de pacotes apt
+    # 1. Update the APT package cache and upgrade all system packages
+    # Performs a full system upgrade including automatic removal of obsolete packages.
+    - name: Update system packages
       ansible.builtin.apt:
         update_cache: yes
-
-    - name: Atualizar todos os pacotes para a versão mais recente
-      ansible.builtin.apt:
         upgrade: full
         autoremove: yes
 
     ### ──────────────────────────────────────────────────────────────────
-    ###                               chrony
+    ###                           Chrony (NTP)
     ### ──────────────────────────────────────────────────────────────────
 
-    - name: Instalar chrony
+    # 2. Install the Chrony package for time synchronization
+    - name: Install Chrony
       ansible.builtin.apt:
         name: chrony
         state: latest
 
-    - name: Configurar chrony
+    # 3. Configure Chrony to use the Brazilian NTP pool
+    # Sets the NTP server pool to 'pool.ntp.br' with 'iburst' for faster initial synchronization.
+    - name: Configure Chrony NTP server
       ansible.builtin.lineinfile:
         path: /etc/chrony/chrony.conf
         regexp: "^pool"
         line: "pool pool.ntp.br iburst"
       notify: restart chronyd
 
-    - name: Garantir que o chrony está em execução ao iniciar máquina
+    # 4. Ensure Chrony service is running and enabled at boot
+    - name: Ensure Chrony service is active and enabled
       ansible.builtin.systemd_service:
         name: chronyd
         state: started
         enabled: yes
 
-    # Ajustando fuso horário
-    - name: Ajustar fuso horário para "America/Recife"
+    # 5. Set system timezone to America/Recife
+    - name: Set timezone to America/Recife
       ansible.builtin.shell:
         cmd: timedatectl set-timezone "America/Recife"
 
     ### ──────────────────────────────────────────────────────────────────
-    ###                         Grupos e usuários
+    ###                         Groups and Users
     ### ──────────────────────────────────────────────────────────────────
 
-    # Criando grupo 'ifpb'
-    - name: Criar grupo "ifpb"
+    # 6. Create the 'ifpb' system group
+    - name: Create 'ifpb' group
       ansible.builtin.group:
         name: ifpb
         state: present
 
-    # Criando usuários 'bruno' e 'icaro'
-    - name: Criar usuários "bruno" e "icaro", definir suas senhas e adicioná-los ao grupo "ifpb"
+    # 7. Grant sudo privileges to members of the 'ifpb' group
+    # Adds a line to /etc/sudoers allowing all members of 'ifpb' group to execute any command.
+    - name: Grant sudo privileges to 'ifpb' group
+      ansible.builtin.lineinfile:
+        path: /etc/sudoers
+        regexp: "%ifpb"
+        line: "%ifpb ALL=(ALL:ALL) ALL"
+        state: present
+
+    # 8. Create users 'bruno' and 'icaro' with SSH keys and add them to 'ifpb' group
+    # Creates each user with a hashed password, generates an SSH key pair, and adds them to the 'ifpb' group.
+    - name: Create users with SSH keys and add to 'ifpb' group
       ansible.builtin.user:
         name: "{{ item }}"
         state: present
@@ -72,53 +85,60 @@
         ssh_key_file: .ssh/key_{{ item }}
       loop: "{{ users }}"
 
-    ### ──────────────────────────────────────────────────────────────────
-    ###                               SSH
-    ### ──────────────────────────────────────────────────────────────────
-
-    - name: Enviar chave pública da máquina real para a VM
+    # 9. Deploy the host's SSH public key to each user's authorized_keys
+    # Enables passwordless SSH login from the Ansible control node to each VM user account.
+    - name: Deploy host SSH public key to users
       ansible.posix.authorized_key:
         user: "{{ item }}"
         state: present
         key: "{{ lookup('file', '~/.ssh/id_ed25519.pub') }}"
       loop: "{{ users }}"
 
-    # Configurações no /etc/ssh/sshd_config
-    - name: Permitir autenticação por chave públicas
+    ### ──────────────────────────────────────────────────────────────────
+    ###                      SSH Server Configuration
+    ### ──────────────────────────────────────────────────────────────────
+
+    # 10. Enable public key authentication in SSH daemon
+    - name: Enable SSH public key authentication
       ansible.builtin.lineinfile:
         path: /etc/ssh/sshd_config
         regexp: "^#?PubkeyAuthentication"
         line: "PubkeyAuthentication yes"
         state: present
 
-    - name: Bloquear logins SSH por senha
+    # 11. Disable password authentication in SSH daemon
+    # Enforces key-based authentication only for enhanced security.
+    - name: Disable SSH password authentication
       ansible.builtin.lineinfile:
         path: /etc/ssh/sshd_config
         regexp: "^#?PasswordAuthentication"
         line: "PasswordAuthentication no"
         state: present
 
-    - name: Proibir acesso ao root via SSH
+    # 12. Disable direct root login via SSH
+    - name: Disable SSH root login
       ansible.builtin.lineinfile:
         path: /etc/ssh/sshd_config
         regexp: "^#?PermitRootLogin"
         line: "PermitRootLogin no"
         state: present
 
-    - name: Permitir acesso apenas a usuários pertencentes aos grupos vagrant e ifpb;
+    # 13. Restrict SSH access to members of 'vagrant' and 'ifpb' groups only
+    - name: Restrict SSH access to specific groups
       ansible.builtin.lineinfile:
         path: /etc/ssh/sshd_config
         line: "AllowGroups vagrant ifpb"
         insertafter: EOF
         create: yes
 
-    # Banner SSH
-    - name: Criar arquivo contendo banner do SSH
+    # 14. Create SSH banner warning message file
+    - name: Create SSH banner file
       ansible.builtin.copy:
         content: "Acesso apenas para pessoas com autorização expressa!!!"
         dest: /etc/issue.net
 
-    - name: Apresentar mensagem de saudação ao acessar o sistema via SSH
+    # 15. Configure SSH daemon to display the banner on login
+    - name: Configure SSH banner
       ansible.builtin.lineinfile:
         path: /etc/ssh/sshd_config
         regexp: "^#?Banner"
@@ -126,31 +146,24 @@
       notify: restart sshd
 
     ### ──────────────────────────────────────────────────────────────────
-    ###                               NFS
+    ###                            NFS Client
     ### ──────────────────────────────────────────────────────────────────
 
-    - name: Instalar cliente NFS
+    # 16. Install NFS common utilities (client-side)
+    # Required for NFS mounting operations on client machines.
+    - name: Install NFS client utilities
       ansible.builtin.apt:
         name: nfs-common
         state: latest
 
-    ### ──────────────────────────────────────────────────────────────────
-    ###                  Adicionar grupo 'ifpb' a sudoers
-    ### ──────────────────────────────────────────────────────────────────
-
-    - name: Permitir grupo "ifpb" usar sudo
-      ansible.builtin.lineinfile:
-        path: /etc/sudoers
-        regexp: "%ifpb"
-        line: "%ifpb ALL=(ALL:ALL) ALL"
-        state: present
-
   handlers:
+    # Handler to restart Chrony service if its configuration changed
     - name: restart chronyd
       ansible.builtin.systemd_service:
         name: chronyd
         state: restarted
 
+    # Handler to restart SSH service if its configuration changed
     - name: restart sshd
       ansible.builtin.systemd_service:
         name: sshd

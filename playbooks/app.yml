@@ -1,77 +1,93 @@
 ---
-- name: Configurações exclusivas a serem aplicadas na máquina "app"
+- name: Apply exclusive configurations to the "app" machine
   hosts: app
   become: true
 
-  # Variáveis específicas do playbook
   vars:
-    nfs_mount_point: /var/nfs # Diretório local onde o NFS será montado
-    remote_share: 192.168.56.128:/dados/nfs # Caminho do compartilhamento NFS no servidor "arq"
+    nfs_mount_point: /var # Local directory for NFS mount point
+    remote_share: 192.168.56.128:/dados/nfs # Remote NFS share path (server IP:path)
 
   tasks:
-    # Instala o servidor web Apache2
-    - name: Instalar servidor web apache2
+    ### ──────────────────────────────────────────────────────────────────
+    ###                               Apache
+    ### ──────────────────────────────────────────────────────────────────
+
+    # 1. Install the Apache2 web server package
+    # This sets up the core Apache HTTP server software to host web pages.
+    - name: Install Apache2 web server
       ansible.builtin.apt:
         name: apache2
         state: present
 
-    # Garante que o serviço Apache está rodando e habilitado no boot
-    - name: Garantir que apache2 está rodando e habilitar sua inicialização ao iniciar máquina
+    # 2. Ensure the Apache2 service is running and enabled on boot
+    # Starts the service immediately and configures it to launch automatically on system startup.
+    - name: Ensure Apache2 service is active and enabled
       ansible.builtin.systemd_service:
         name: apache2
         state: started
         enabled: yes
 
-    # Cria e copia o arquivo index.html personalizado para o diretório web
-    - name: Criar arquivo "index.html" personalizado
+    # 3. Deploy a custom index.html file to the web directory
+    # Copies a pre-made HTML file from the Ansible control node to the server's web root.
+    - name: Deploy custom index.html
       ansible.builtin.copy:
-        src: ../files/html/index.html # VERIFICAR ISSO AQUI
+        src: ../files/html/index.html
         dest: "/var/www/html/index.html"
-        owner: www-data
-        group: www-data
-        mode: "0644"
+        owner: www-data # Standard Apache user on Debian/Ubuntu
+        group: www-data # Standard Apache group
+        mode: "0644" # Readable by all, writable only by owner
       notify: restart apache2
 
-    # Instala o autofs e o cliente NFS para montagem automática
-    - name: Instalar autofs e cliente NFS
-      ansible.builtin.apt:
-        name:
-          - autofs
-          - nfs-common
-        state: present
+    ### ──────────────────────────────────────────────────────────────────
+    ###                           NFS & AutoFS
+    ### ──────────────────────────────────────────────────────────────────
 
-    # Cria o diretório local para montagem do NFS
-    - name: Criar diretório de montagem /var/nfs
+    # 4. Install the AutoFS service for automatic NFS mounting
+    # AutoFS will mount the NFS share on-demand when accessed and unmount it after inactivity.
+    - name: Install AutoFS service
+      ansible.builtin.apt:
+        name: autofs
+        state: latest
+
+    # 5. Create the local base directory for the NFS mount point
+    # This directory will host the AutoFS-managed mount point for the remote share.
+    - name: Create NFS base mount directory
       ansible.builtin.file:
         path: "{{ nfs_mount_point }}"
         state: directory
         owner: root
         group: root
-        mode: "0755"
+        mode: "0755" # Allows all users to list and enter the directory
 
-    # Adiciona entrada no auto.master para o ponto de montagem
-    - name: Configurar auto.master para NFS
-      ansible.builtin.blockinfile:
+    # 6. Configure the AutoFS master map file
+    # Informs AutoFS to use the map file /etc/auto.nfs for mounts under `{{ nfs_mount_point }}`.
+    # The '--ghost' option creates empty directories before mounting for better visibility.
+    - name: Configure AutoFS master map
+      ansible.builtin.lineinfile:
         path: /etc/auto.master
-        block: |
-          {{ nfs_mount_point }} /etc/auto.nfs --ghost
+        line: "{{ nfs_mount_point }} /etc/auto.nfs --ghost"
+        insertafter: EOF
+        create: yes # Creates the /etc/auto.master file if it doesn't exist
 
-    # Cria arquivo auto.nfs com parâmetros de montagem do compartilhamento
-    - name: Configurar arquivo auto.nfs.
-      ansible.builtin.copy:
-        dest: /etc/auto.nfs
-        content: |
-          share -rw,soft,intr {{ remote_share }}
+    # 7. Define the NFS share details in the AutoFS map file
+    # Specifies the remote share, mount options, and local subdirectory name ("nfs").
+    # Options: rw (read-write), hard (retry indefinitely on server failure), timeo (timeout in deciseconds).
+    - name: Configure NFS share in AutoFS map
+      ansible.builtin.lineinfile:
+        path: /etc/auto.nfs
+        line: "nfs -fstype=nfs,rw,hard,timeo=600 {{ remote_share }}"
+        insertafter: EOF
+        create: yes # Creates the /etc/auto.nfs file if it doesn't exist
       notify: restart autofs
 
   handlers:
-    # Reinicia o Apache
+    # Handler to restart the Apache2 service if its configuration or content changed
     - name: restart apache2
       ansible.builtin.systemd_service:
         name: apache2
         state: restarted
 
-    # Reinicia o serviço autofs
+    # Handler to restart the AutoFS service if its configuration changed
     - name: restart autofs
       ansible.builtin.systemd_service:
         name: autofs
