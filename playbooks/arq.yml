@@ -11,7 +11,7 @@
     vg_name: dados # Nome do Volume Group
     lv_name: ifpb # Nome do Logical Volume
     lv_size: 15G # Tamanho do Logical Volume
-    nfs_mount_point: /dados # Ponto de montagem do LV
+    mount_point: /dados # Ponto de montagem do LV
 
     nfs_user: nfs-ifpb # Usuário que será dono do NFS
     shared_dir: /dados/nfs # Diretório a ser compartilhado via NFS
@@ -154,13 +154,13 @@
     # Cria o diretório de montagem /dados
     - name: Criar diretório /dados
       ansible.builtin.file:
-        path: "{{ nfs_mount_point }}"
+        path: "{{ mount_point }}"
         state: directory
 
     # Configura o LV para montagem automática no /dados via fstab
     - name: Configurar montagem automática no /dados
       ansible.posix.mount:
-        path: "{{ nfs_mount_point }}"
+        path: "{{ mount_point }}"
         src: "/dev/{{ vg_name }}/{{ lv_name }}"
         fstype: ext4
         state: mounted
@@ -181,6 +181,7 @@
       ansible.builtin.user:
         name: "{{ nfs_user }}"
         shell: /usr/sbin/nologin
+        create_home: no
         system: yes
         state: present
 
@@ -191,7 +192,7 @@
         state: directory
         owner: "{{ nfs_user }}"
         group: "{{ nfs_user }}"
-        mode: "0750" # MUDAR PARA 0755 RESOLVE PROBLEMA
+        mode: "0755" # MUDAR PARA 0755 RESOLVE PROBLEMA
 
     # Obtém o UID do usuário nfs-ifpb
     - name: Obter UID do usuário nfs-ifpb
@@ -216,7 +217,7 @@
       ansible.builtin.copy:
         dest: /etc/exports
         content: |
-          {{ shared_dir }} {{ subnet }} (rw,sync,no_subtree_check,all_squash,anonuid={{ nfs_uid }},anongid={{ nfs_gid }})
+          {{ shared_dir }} {{ subnet }}(rw,sync,no_subtree_check,all_squash,anonuid={{ nfs_uid }},anongid={{ nfs_gid }})
       notify: restart nfs-kernel-server
 
     # Habilita e inicia o servidor NFS

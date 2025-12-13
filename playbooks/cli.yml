@@ -37,7 +37,7 @@
       notify: restart ssh
 
     # Garantir que o X11 não usará localhost
-    - name: Garantir configuração X11UseLocalhost.
+    - name: Garantir configuração X11UseLocalhost
       ansible.builtin.lineinfile:
         path: /etc/ssh/sshd_config
         regexp: "^#?X11UseLocalhost"
@@ -45,16 +45,14 @@
         state: present
       notify: restart ssh
 
-    # Instala serviço autofs e cliente NFS
-    - name: Instalar autofs e cliente NFS.
+    # Instala serviço autofs
+    - name: Instalar autofs e cliente NFS
       ansible.builtin.apt:
-        name:
-          - autofs # Montagem automática
-          - nfs-common # Cliente NFS
-        state: present
+        name: autofs # Montagem automática
+        state: latest
 
     # Cria diretório de montagem local
-    - name: Criar diretório de montagem /var/nfs.
+    - name: Criar diretório de montagem /var.
       ansible.builtin.file:
         path: "{{ nfs_mount_point }}"
         state: directory
@@ -63,18 +61,20 @@
         mode: "0755"
 
     # Configura auto.master para mapear o diretório NFS
-    - name: Configurar auto.master para NFS.
-      ansible.builtin.blockinfile:
+    - name: Configurar auto.master para cliente NFS
+      ansible.builtin.lineinfile:
         path: /etc/auto.master
-        block: |
-          {{ nfs_mount_point }} /etc/auto.nfs --ghost
+        line: "{{ nfs_mount_point }} /etc/auto.nfs --ghost"
+        insertafter: EOF
+        create: yes
 
-    # Configura o arquivo auto.nfs com parâmetros do compartilhamento
-    - name: Configurar arquivo auto.nfs.
-      ansible.builtin.copy:
-        dest: /etc/auto.nfs
-        content: |
-          nfs -fstype=nfs,rw,soft,intr,timeo=300,retrans=3 {{ remote_share }}
+    # Configura auto.nfs com parâmetros do compartilhamento
+    - name: Configurar auto.nfs para cliente NFS
+      ansible.builtin.lineinfile:
+        path: /etc/auto.nfs
+        line: "nfs -fstype=nfs,rw,hard,timeo=600 {{ remote_share }}"
+        insertafter: EOF
+        create: yes
       notify: restart autofs
 
     # Reinicia autofs para aplicar novas configurações
