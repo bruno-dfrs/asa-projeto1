@@ -29,7 +29,7 @@
     - name: Install Chrony
       ansible.builtin.apt:
         name: chrony
-        state: latest
+        state: present
 
     # 3. Configure Chrony to use the Brazilian NTP pool
     # Sets the NTP server pool to 'pool.ntp.br' with 'iburst' for faster initial synchronization.
@@ -94,6 +94,22 @@
         key: "{{ lookup('file', '~/.ssh/id_ed25519.pub') }}"
       loop: "{{ users }}"
 
+    - name: Create 'nfs-ifpb' group
+      ansible.builtin.group:
+        name: nfs-ifpb
+        state: present
+        gid: "2001"
+
+    - name: Create NFS user with consistent UID/GID across all VMs
+      ansible.builtin.user:
+        name: nfs-ifpb
+        uid: "2001"
+        group: nfs-ifpb
+        system: yes
+        create_home: no
+        shell: /usr/sbin/nologin
+        state: present
+
     ### ──────────────────────────────────────────────────────────────────
     ###                      SSH Server Configuration
     ### ──────────────────────────────────────────────────────────────────
@@ -154,7 +170,7 @@
     - name: Install NFS client utilities
       ansible.builtin.apt:
         name: nfs-common
-        state: latest
+        state: present
 
   handlers:
     # Handler to restart Chrony service if its configuration changed

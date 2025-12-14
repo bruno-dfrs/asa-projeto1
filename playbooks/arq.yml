@@ -4,14 +4,18 @@
   become: true
 
   vars:
-    partitions: # Additional disk partitions to be created (from Vagrantfile disks)
-      - sdb
-      - sdc
-      - sdd
+    disks:
+      - /dev/sdb
+      - /dev/sdc
+      - /dev/sdd
+
     vg_name: dados # Name of the LVM Volume Group
-    lv_name: ifpb # Name of the LVM Logical Volume
-    lv_size: 15G # Size of the Logical Volume
-    mount_point: /dados # Mount point for the Logical Volume
+
+    lvs:
+      - name: dados # Name of the LVM Logical Volume
+        size: 15G # Size of the Logical Volume
+        fstype: ext4
+        mount: /dados # Mount point for the Logical Volume
 
     nfs_user: nfs-ifpb # System user for NFS ownership and squashing
     shared_dir: /dados/nfs # Directory to be exported via NFS
@@ -27,7 +31,7 @@
     - name: Install ISC DHCP Server
       ansible.builtin.apt:
         name: isc-dhcp-server
-        state: latest
+        state: present
 
     # 2. Deploy the DHCP server configuration file
     # Copies a pre-configured dhcpd.conf file that defines the IP pool, lease times, and options for the network.
@@ -63,7 +67,7 @@
     - name: Install BIND9 DNS server
       ansible.builtin.apt:
         name: bind9
-        state: latest
+        state: present
 
     # 6. Deploy BIND9 global options configuration
     # Sets general DNS server parameters like listening interfaces, forwarders, and ACLs.
@@ -137,89 +141,69 @@
     # Installs the necessary packages to manage Logical Volume Manager (LVM) and disk partitions.
     - name: Install LVM and partitioning tools
       ansible.builtin.apt:
-        name:
-          - lvm2
-          - parted
-        state: lastest
-
-    # 13. Create primary partitions on each additional disk
-    # Uses parted to create a single primary partition (number 1) on each of the three extra disks.
-    - name: Create primary partitions on disks
-      community.general.parted:
-        device: "/dev/{{ item }}"
-        number: 1
+        name: lvm2
         state: present
-        part_type: primary
-        fs_type: ext4
-        resize: yes
-      loop: "{{ partitions }}"
 
-    # 14. Initialize partitions as LVM Physical Volumes (PVs)
-    # Prepares each partition for use with LVM by creating a Physical Volume on it.
-    # The 'creates' argument makes the task idempotent; it will skip if the PV already exists.
-    - name: Create LVM Physical Volumes
-      ansible.builtin.command: pvcreate /dev/{{ item }}1
-      loop: "{{ partitions }}"
-      args:
-        creates: "/dev/{{ item }}1"
+    # 13. Create physical volumes from the specified disks
+    # Initializes each disk in the 'disks' list as a Physical Volume (PV) for LVM.
+    # The 'when' condition ensures idempotence by only creating PVs on disks not already part of the volume group.
+    - name: Create physical volume
+      community.general.lvm_pv:
+        device: "{{ item }}"
+      loop: "{{ disks }}"
+      when: item not in ansible_lvm.vgs[vg_name].pvs|default([])
 
-    # 15. Create an LVM Volume Group (VG) named 'dados'
-    # Combines the three Physical Volumes into a single storage pool.
-    - name: Create LVM Volume Group
-      ansible.builtin.command: vgcreate {{ vg_name }} /dev/sdb1 /dev/sdc1 /dev/sdd1
-      args:
-        creates: "/dev/{{ vg_name }}"
+    # 14. Create a volume group containing the physical volumes
+    - name: Create volume group
+      community.general.lvg:
+        vg: "{{ vg_name }}"
+        pvs: "{{ disks }}"
 
-    # 16. Create an LVM Logical Volume (LV) named 'ifpb'
-    # Allocates 15GB of space from the 'dados' Volume Group to create a usable block device.
-    - name: Create LVM Logical Volume
-      ansible.builtin.command: lvcreate -L {{ lv_size }} -n {{ lv_name }} {{ vg_name }}
-      args:
-        creates: "/dev/{{ vg_name }}/{{ lv_name }}"
+    # 15. Create logical volumes within the volume group
+    - name: Create logical volume
+      community.general.lvol:
+        lv: "{{ item.name }}"
+        vg: "{{ vg_name }}"
+        size: "{{ item.size }}"
+      loop: "{{ lvs }}"
 
-    # 17. Format the Logical Volume with the ext4 filesystem
-    - name: Format Logical Volume as ext4
-      community.general.filesystem:
-        fstype: ext4
-        dev: "/dev/{{ vg_name }}/{{ lv_name }}"
+    # 16. Format the logical volumes with a filesystem
+    - name: Create filesystem
+      ansible.builtin.filesystem:
+        fstype: "{{ item.fstype }}"
+        dev: "/dev/{{ vg_name }}/{{ item.name }}"
+      loop: "{{ lvs }}"
 
-    # 18. Create the final mount point directory
-    - name: Create mount point directory
-      ansible.builtin.file:
-        path: "{{ mount_point }}"
-        state: directory
-
-    # 19. Mount the Logical Volume and add entry to /etc/fstab
-    # Permanently mounts the LV at /dados with default options, ensuring it mounts at boot.
-    - name: Mount and persist Logical Volume
-      ansible.posix.mount:
-        path: "{{ mount_point }}"
-        src: "/dev/{{ vg_name }}/{{ lv_name }}"
-        fstype: ext4
+    # 17. Mount the logical volumes to their respective directories
+    - name: Mount logical volume
+      ansible.builtin.mount:
+        path: "{{ item.mount }}"
+        src: "/dev/{{ vg_name }}/{{ item.name }}"
+        fstype: "{{ item.fstype }}"
         state: mounted
-        opts: defaults
+      loop: "{{ lvs }}"
 
     ### ──────────────────────────────────────────────────────────────────
     ###                           NFS & AutoFS
     ### ──────────────────────────────────────────────────────────────────
 
-    # 20. Install the NFS kernel server package
+    # 18. Install the NFS kernel server package
     - name: Install NFS kernel server
       ansible.builtin.apt:
         name: nfs-kernel-server
         state: present
 
-    # 21. Create the dedicated NFS system user
+    # 19. Create the dedicated NFS system user
     # This user's UID/GID will be used for the 'all_squash' mapping. It has no login shell for security.
-    - name: Create dedicated NFS system user
-      ansible.builtin.user:
-        name: "{{ nfs_user }}"
-        shell: /usr/sbin/nologin
-        create_home: no
-        system: yes
-        state: present
+    # - name: Create dedicated NFS system user
+    #   ansible.builtin.user:
+    #     name: "{{ nfs_user }}"
+    #     shell: /usr/sbin/nologin
+    #     create_home: no
+    #     system: yes
+    #     state: present
 
-    # 22. Create and configure the directory to be shared via NFS
+    # 20. Create and configure the directory to be shared via NFS
     # Sets ownership and permissions. Using 0755 ensures the NFS user has full access and others can read/enter.
     - name: Create and configure NFS shared directory
       ansible.builtin.file:
@@ -227,41 +211,17 @@
         state: directory
         owner: "{{ nfs_user }}"
         group: "{{ nfs_user }}"
-        mode: "0755" # Author's note: CHANGING TO 0755 SOLVES PROBLEM
+        mode: "0775"
 
-    # 23. Retrieve the UID of the NFS system user
-    # Stores the UID in a variable for use in the NFS export configuration.
-    - name: Get NFS user UID
-      ansible.builtin.command: id -u {{ nfs_user }}
-      register: uid
-      changed_when: false
-
-    # 24. Retrieve the GID of the NFS system user's primary group
-    - name: Get NFS user GID
-      ansible.builtin.command: id -g {{ nfs_user }}
-      register: gid
-      changed_when: false
-
-    # 25. Store the UID and GID as Ansible facts
-    # Makes the dynamically retrieved IDs available for templating in the next task.
-    - name: Store NFS UID and GID as facts
-      ansible.builtin.set_fact:
-        nfs_uid: "{{ uid.stdout }}"
-        nfs_gid: "{{ gid.stdout }}"
-
-    # 26. Configure the NFS export in /etc/exports
-    # Defines the directory to share, the allowed network, and critical options:
-    # rw=read-write, sync=synchronous writes, all_squash=map all remote users,
-    # anonuid/anongid=map to the specified local UID/GID (nfs-ifpb).
     - name: Configure NFS export
       ansible.builtin.lineinfile:
         path: /etc/exports
-        line: "{{ shared_dir }} {{ subnet }}(rw,sync,no_subtree_check,all_squash,anonuid={{ nfs_uid }},anongid={{ nfs_gid }})"
+        line: "{{ shared_dir }} {{ subnet }}(rw,sync,no_subtree_check,all_squash,anonuid=2001,anongid=2001)"
         insertafter: EOF
         create: yes # Creates the /etc/exports file if it doesn't exist
       notify: restart nfs-kernel-server
 
-    # 27. Ensure the NFS service is running and enabled at boot
+    # 25. Ensure the NFS service is running and enabled at boot
     - name: Ensure NFS service is active and enabled
       ansible.builtin.systemd_service:
         name: nfs-kernel-server

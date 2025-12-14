@@ -4,7 +4,7 @@
   become: true
 
   vars:
-    nfs_mount_point: /var # Local directory for NFS mount point
+    nfs_mount_point: /var/nfs # Local directory for NFS mount point
     remote_share: 192.168.56.128:/dados/nfs # Remote NFS share path (server IP:path)
 
   tasks:
@@ -36,7 +36,7 @@
     - name: Install AutoFS service
       ansible.builtin.apt:
         name: autofs
-        state: latest
+        state: present
 
     # 4. Create the local base directory for the NFS mount point
     # This directory will host the AutoFS-managed mount point for the remote share.
@@ -64,7 +64,7 @@
     - name: Configure NFS share in AutoFS map
       ansible.builtin.lineinfile:
         path: /etc/auto.nfs
-        line: "-fstype=nfs,rw,hard,timeo=600 {{ remote_share }}"
+        line: ". -fstype=nfs,rw,hard,timeo=600 {{ remote_share }}"
         insertafter: EOF
         create: yes # Creates the /etc/auto.nfs file if it doesn't exist
       notify: restart autofs

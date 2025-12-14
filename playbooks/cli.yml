@@ -61,40 +61,31 @@
     - name: Install AutoFS for NFS
       ansible.builtin.apt:
         name: autofs
-        state: latest
+        state: present
 
-    # 6. Create the local base directory for NFS mounts
-    # This directory will contain the AutoFS-managed mount point.
-    - name: Create NFS base mount directory
-      ansible.builtin.file:
-        path: "{{ nfs_mount_point }}"
-        state: directory
-        owner: root
-        group: root
-        mode: "0755" # Allows all users to list and enter the directory
-
-    # 7. Configure the AutoFS master map file
+    # 6. Configure the AutoFS master map file
     # Tells AutoFS to use the map file /etc/auto.nfs for mounts under {{ nfs_mount_point }}.
     # The '--ghost' option creates empty directories before mounting for better visibility.
     - name: Configure AutoFS master map
       ansible.builtin.lineinfile:
         path: /etc/auto.master
-        line: "{{ nfs_mount_point }} /etc/auto.nfs --ghost"
+        line: "{{ nfs_mount_point | dirname }} /etc/auto.nfs --ghost"
         insertafter: EOF
         create: yes # Creates the /etc/auto.master file if it doesn't exist
+      notify: restart autofs
 
-    # 8. Define the NFS share details in the AutoFS map file
+    # 7. Define the NFS share details in the AutoFS map file
     # Specifies the remote NFS server, mount options, and local subdirectory name ("nfs").
     # Options: rw (read-write), hard (retry indefinitely on server failure), timeo (timeout in deciseconds).
     - name: Configure NFS share in AutoFS map
       ansible.builtin.lineinfile:
         path: /etc/auto.nfs
-        line: "-fstype=nfs,rw,hard,timeo=600 {{ remote_share }}"
+        line: "{{ nfs_mount_point | basename }} -fstype=nfs,rw,hard,intr,timeo=300 {{ remote_share }}"
         insertafter: EOF
         create: yes # Creates the /etc/auto.nfs file if it doesn't exist
       notify: restart autofs
 
-    # 9. Ensure the AutoFS service is running and enabled at boot
+    # 8. Ensure the AutoFS service is running and enabled at boot
     - name: Ensure AutoFS service is active
       ansible.builtin.systemd_service:
         name: autofs
