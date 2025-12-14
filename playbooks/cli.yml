@@ -69,7 +69,7 @@
     - name: Configure AutoFS master map
       ansible.builtin.lineinfile:
         path: /etc/auto.master
-        line: "{{ nfs_mount_point | dirname }} /etc/auto.nfs --ghost"
+        line: "/- /etc/auto.nfs --ghost"
         insertafter: EOF
         create: yes # Creates the /etc/auto.master file if it doesn't exist
       notify: restart autofs
@@ -80,7 +80,7 @@
     - name: Configure NFS share in AutoFS map
       ansible.builtin.lineinfile:
         path: /etc/auto.nfs
-        line: "{{ nfs_mount_point | basename }} -fstype=nfs,rw,hard,intr,timeo=300 {{ remote_share }}"
+        line: "{{ nfs_mount_point }} -fstype=nfs,rw,hard,intr,timeo=300 {{ remote_share }}"
         insertafter: EOF
         create: yes # Creates the /etc/auto.nfs file if it doesn't exist
       notify: restart autofs

@@ -38,23 +38,13 @@
         name: autofs
         state: present
 
-    # 4. Create the local base directory for the NFS mount point
-    # This directory will host the AutoFS-managed mount point for the remote share.
-    - name: Create NFS base mount directory
-      ansible.builtin.file:
-        path: "{{ nfs_mount_point }}"
-        state: directory
-        owner: root
-        group: root
-        mode: "0755" # Allows all users to list and enter the directory
-
     # 5. Configure the AutoFS master map file
     # Informs AutoFS to use the map file /etc/auto.nfs for mounts under `{{ nfs_mount_point }}`.
     # The '--ghost' option creates empty directories before mounting for better visibility.
     - name: Configure AutoFS master map
       ansible.builtin.lineinfile:
         path: /etc/auto.master
-        line: "{{ nfs_mount_point }} /etc/auto.nfs --ghost"
+        line: "/- /etc/auto.nfs --ghost"
         insertafter: EOF
         create: yes # Creates the /etc/auto.master file if it doesn't exist
 
@@ -64,7 +54,7 @@
     - name: Configure NFS share in AutoFS map
       ansible.builtin.lineinfile:
         path: /etc/auto.nfs
-        line: ". -fstype=nfs,rw,hard,timeo=600 {{ remote_share }}"
+        line: "{{ nfs_mount_point }} -fstype=nfs,rw,hard,intr,timeo=300 {{ remote_share }}"
         insertafter: EOF
         create: yes # Creates the /etc/auto.nfs file if it doesn't exist
       notify: restart autofs

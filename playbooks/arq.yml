@@ -133,6 +133,10 @@
         group: root
         mode: "0644"
 
+    - name: Make /etc/resolv.conf immutable
+      ansible.builtin.shell:
+        cmd: chattr +i /etc/resolv.conf
+
     ### ──────────────────────────────────────────────────────────────────
     ###                               LVM
     ### ──────────────────────────────────────────────────────────────────
