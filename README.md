@@ -190,7 +190,6 @@ This section documents the key configuration files that enable the network servi
 Ensure you have the following installed on your host machine:
 - **Vagrant** (latest version)
 - **VirtualBox** (latest version)
-- **Ansible** (latest version)
 - A pair of SSH keys generated on your machine. The public key must be named `id_ed25519.pub`
 
 ### Deployment
@@ -200,7 +199,14 @@ git clone https://github.com/bruno-dfrs/asa-projeto1.git
 cd asa-projeto1/
 ```
 
-2. Start the environment by running the following command in the project root. This will create and provision all four VMs sequentially:
+2. Create a python virtual environment and install pip dependencies into it. This will make sure that you don't need to install any pip library locally on your machine.
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+```
+
+3. Start the environment by running the following command in the project root. This will create and provision all four VMs sequentially:
 ```bash
 vagrant up
 ```
