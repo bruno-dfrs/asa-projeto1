@@ -232,7 +232,8 @@ ssh -X bruno|icaro@192.168.56.50
 ### NFS Share Verification
 From any client VM (`db`, `app`, or `cli`), check the NFS mount:
 ```bash
-ls /var/nfs/          # Shows files shared from arq server
+touch /var/nfs/test
+ls -l /var/nfs/          # Shows files shared from arq server
 ```
 
 ### DNS Resolution Test
