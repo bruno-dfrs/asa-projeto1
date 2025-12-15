@@ -84,13 +84,13 @@ The central server hosting foundational network and storage services.
 ### 2. `db` - Database Server (`db.yml`)
 A dedicated server for database operations.
 *   **Database**: Installs and starts the `mariadb-server` package.
-*   **File Access**: Configures AutoFS to automatically mount the shared `/dados/nfs` directory from the `arq` server at `/var/nfs/nfs` on demand.
+*   **File Access**: Configures AutoFS to automatically mount the shared `/dados/nfs` directory from the `arq` server at `/var/nfs` on demand.
 
 ### 3. `app` - Web Server (`app.yml`)
 A server for hosting web applications.
 *   **Web Server**: Installs, starts, and enables the `apache2` HTTP server.
 *   **Content**: Deploys a custom `index.html` file to the default web root (`/var/www/html/`).
-*   **File Access**: Configures AutoFS to automatically mount the shared NFS directory from `arq` at `/var/nfs/nfs`.
+*   **File Access**: Configures AutoFS to automatically mount the shared NFS directory from `arq` at `/var/nfs`.
 
 ### 4. `cli` - Client Workstation (`cli.yml`)
 A graphical client machine for user access and testing.
